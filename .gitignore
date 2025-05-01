@@ -1,0 +1,5 @@
+.env
+.DS_Store
+*.mdb
+.vscode/settings.json
+*.session.sql
