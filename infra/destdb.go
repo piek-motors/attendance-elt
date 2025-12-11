@@ -42,21 +42,34 @@ func Connect(dataSourceName string) (*DestDB, error) {
 	return &DestDB{db}, nil
 }
 
-func (db *DestDB) UsersAll() (users []User, err error) {
-	err = db.Select(&users, "SELECT * FROM attendance.users")
-	return users, err
+func (db *DestDB) EmployeesAll() (employees []User, err error) {
+	err = db.Select(&employees, "SELECT * FROM attendance.employees")
+	return employees, err
 }
 
-func (db *DestDB) InsertUsers(users []User) error {
-	if len(users) == 0 {
+func (db *DestDB) InsertEmployees(employees []User) error {
+	if len(employees) == 0 {
 		return nil
 	}
 
 	tx := db.MustBegin()
 	t := time.Now().Local().Format("2006-01-02T15:04:05")
-	for _, user := range users {
-		tx.MustExec("INSERT INTO attendance.users (firstname, lastname, card, created_at) VALUES ($1, $2, $3, $4)",
+	for _, user := range employees {
+		tx.MustExec("INSERT INTO attendance.employees (firstname, lastname, card, created_at) VALUES ($1, $2, $3, $4)",
 			user.FirstName, user.LastName, user.Card, t)
+	}
+	return tx.Commit()
+}
+
+func (db *DestDB) UpdateEmployees(employees []User) error {
+	if len(employees) == 0 {
+		return nil
+	}
+
+	tx := db.MustBegin()
+	for _, user := range employees {
+		tx.MustExec("UPDATE attendance.employees SET firstname = $1, lastname = $2 WHERE card = $3",
+			user.FirstName, user.LastName, user.Card)
 	}
 	return tx.Commit()
 }
@@ -83,33 +96,44 @@ func (db *DestDB) InsertIntervals(intervals []Interval) error {
 
 }
 
-func (db *DestDB) SyncUsers(deviceUsers []*entity.User) error {
-	dbUsers, err := db.UsersAll()
+func (db *DestDB) SyncEmployees(deviceUsers []*entity.User) error {
+	existingEmployees, err := db.EmployeesAll()
 	if err != nil {
-		return fmt.Errorf("sinchronizing users: %w", err)
+		return fmt.Errorf("fail to load employees: %w", err)
 	}
 
-	unregisteredUsers := make([]User, 0)
+	insert := make([]User, 0)
+	update := make([]User, 0)
 
 	for _, deviceUser := range deviceUsers {
 		var found bool
+		user := User{
+			FirstName: deviceUser.FirstName,
+			LastName:  deviceUser.LastName,
+			Card:      deviceUser.Card,
+		}
 
-		for _, dbUser := range dbUsers {
-			if deviceUser.Card == dbUser.Card {
+		for _, existing := range existingEmployees {
+			if user.Card == existing.Card {
 				found = true
+
+				if user.FirstName != existing.FirstName || user.LastName != existing.LastName {
+					update = append(update, user)
+				}
+
 				break
 			}
 		}
 
 		if !found {
-			unregisteredUsers = append(unregisteredUsers, User{
-				FirstName: deviceUser.FirstName,
-				LastName:  deviceUser.LastName,
-				Card:      deviceUser.Card,
-			})
+			insert = append(insert, user)
 		}
 	}
 
-	log.Printf("syncing %d users\n", len(unregisteredUsers))
-	return db.InsertUsers(unregisteredUsers)
+	log.Printf("syncing %d users\n", len(insert))
+	err = db.UpdateEmployees(update)
+	if err != nil {
+		return err
+	}
+	return db.InsertEmployees(insert)
 }

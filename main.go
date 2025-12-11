@@ -52,7 +52,7 @@ func main() {
 		log.Fatalf("error connecting to database: %v", err)
 	}
 
-	err = db.SyncUsers(users)
+	err = db.SyncEmployees(users)
 	if err != nil {
 		log.Fatalf("error syncing users: %v", err)
 	}
