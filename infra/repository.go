@@ -12,7 +12,7 @@ import (
 	"github.com/spooky-finn/piek-attendance-prod/entity"
 )
 
-type User struct {
+type Employee struct {
 	ID        int            `db:"id"`
 	FirstName string         `db:"firstname"`
 	LastName  string         `db:"lastname"`
@@ -29,25 +29,25 @@ type Interval struct {
 	ExtEventID sql.NullInt64  `db:"ext_event_id"`
 }
 
-type DestDB struct {
+type Repository struct {
 	*sqlx.DB
 }
 
-func Connect(dataSourceName string) (*DestDB, error) {
+func Connect(dataSourceName string) (*Repository, error) {
 	db, err := sqlx.Connect("postgres", dataSourceName)
 	if err != nil {
 		return nil, err
 	}
 
-	return &DestDB{db}, nil
+	return &Repository{db}, nil
 }
 
-func (db *DestDB) EmployeesAll() (employees []User, err error) {
+func (db *Repository) EmployeesAll() (employees []Employee, err error) {
 	err = db.Select(&employees, "SELECT * FROM attendance.employees")
 	return employees, err
 }
 
-func (db *DestDB) InsertEmployees(employees []User) error {
+func (db *Repository) InsertEmployees(employees []Employee) error {
 	if len(employees) == 0 {
 		return nil
 	}
@@ -61,7 +61,7 @@ func (db *DestDB) InsertEmployees(employees []User) error {
 	return tx.Commit()
 }
 
-func (db *DestDB) UpdateEmployees(employees []User) error {
+func (db *Repository) UpdateEmployees(employees []Employee) error {
 	if len(employees) == 0 {
 		return nil
 	}
@@ -74,7 +74,7 @@ func (db *DestDB) UpdateEmployees(employees []User) error {
 	return tx.Commit()
 }
 
-func (db *DestDB) InsertIntervals(intervals []Interval) error {
+func (db *Repository) InsertIntervals(intervals []Interval) error {
 	if len(intervals) == 0 {
 		return nil
 	}
@@ -96,18 +96,18 @@ func (db *DestDB) InsertIntervals(intervals []Interval) error {
 
 }
 
-func (db *DestDB) SyncEmployees(deviceUsers []*entity.User) error {
+func (db *Repository) SyncEmployees(deviceUsers []*entity.User) error {
 	existingEmployees, err := db.EmployeesAll()
 	if err != nil {
 		return fmt.Errorf("fail to load employees: %w", err)
 	}
 
-	insert := make([]User, 0)
-	update := make([]User, 0)
+	insert := make([]Employee, 0)
+	update := make([]Employee, 0)
 
 	for _, deviceUser := range deviceUsers {
 		var found bool
-		user := User{
+		user := Employee{
 			FirstName: deviceUser.FirstName,
 			LastName:  deviceUser.LastName,
 			Card:      deviceUser.Card,
