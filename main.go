@@ -19,21 +19,27 @@ var (
 )
 
 func main() {
+	log.Println("starting attendance ETL process")
 	flag.Parse()
 
 	err := godotenv.Load(".env")
 	if err != nil {
 		panic("Error loading .env file")
 	}
+	log.Println(".env file loaded")
 
 	mdbpath := os.Getenv("ACCESS_MDB_PATH")
+	log.Printf("initializing MDB exporter with path: %s", mdbpath)
 	exporter := infra.NewMdbExporter(mdbpath)
 
+	log.Println("exporting users from MDB database")
 	users, err := exporter.ExportUsersFromDB()
 	if err != nil {
 		log.Fatalln(err)
 	}
+	log.Printf("exported %d users", len(users))
 
+	log.Printf("exporting events from last %d months", *selectEventsForMonths)
 	events, err := exporter.ExportEventsFromDB(*selectEventsForMonths)
 	if err != nil {
 		log.Fatalf("error exporting events: %v", err)
@@ -47,14 +53,21 @@ func main() {
 		os.Getenv("POSTGRES_DB"),
 	)
 	db, err := database.Connect(destDBconnStr)
-	log.Println("db connection established")
 	if err != nil {
 		log.Fatalf("error connecting to database: %v", err)
 	}
+	log.Println("database connection established")
 
+	log.Println("syncing employees to database")
 	err = db.SyncEmployees(users)
 	if err != nil {
 		log.Fatalf("error syncing users: %v", err)
+	}
+
+	log.Println("inserting events to database")
+	err = db.InsertEvents(events)
+	if err != nil {
+		log.Fatalf("error inserting events: %v", err)
 	}
 
 	eventsmap := make(map[string][]entity.Event)
@@ -88,10 +101,13 @@ func main() {
 			})
 		}
 	}
-	log.Printf("formed %v intervals for last %v months \n", len(intervals), *selectEventsForMonths)
+	log.Printf("formed %d intervals for last %d months", len(intervals), *selectEventsForMonths)
 
+	log.Println("inserting intervals to database")
 	err = db.InsertIntervals(intervals)
 	if err != nil {
 		log.Fatalf("error getting intervals: %v", err)
 	}
+
+	log.Println("ETL process completed successfully")
 }

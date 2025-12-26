@@ -95,12 +95,20 @@ func (db *Repository) InsertIntervals(intervals []Interval) error {
 
 }
 
-func (db *Repository) InsertEvents(events []Event) error {
+func (db *Repository) InsertEvents(events []entity.Event) error {
 	if len(events) == 0 {
 		return nil
 	}
-	res, err := db.NamedExec(`INSERT INTO attendance.events (card, timestamp)
-	VALUES (:card, :timestamp) ON CONFLICT DO NOTHING`, events)
+	infraEvents := make([]Event, len(events))
+	for i, e := range events {
+		infraEvents[i] = Event{
+			ID:        e.ID,
+			Card:      e.Card,
+			Timestamp: e.Time,
+		}
+	}
+	res, err := db.NamedExec(`INSERT INTO attendance.events (id, card, timestamp)
+	VALUES (:id, :card, :timestamp) ON CONFLICT DO NOTHING`, infraEvents)
 	if err != nil {
 		return fmt.Errorf("inserting events: %w", err)
 	}
@@ -146,7 +154,8 @@ func (db *Repository) SyncEmployees(deviceUsers []*entity.User) error {
 		}
 	}
 
-	log.Printf("syncing %d users\n", len(insert))
+	log.Printf("inserted %d employees\n", len(insert))
+	log.Printf("updated %d employees\n", len(update))
 	err = db.UpdateEmployees(update)
 	if err != nil {
 		return err
